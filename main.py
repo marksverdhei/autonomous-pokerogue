@@ -2,36 +2,24 @@ import asyncio
 import os
 from browser_use import Agent, Browser
 from browser_use.llm import ChatOpenAI
+from dotenv import load_dotenv
+import yaml
 
 os.environ["ANONYMIZED_TELEMETRY"] = "false"
-key = os.environ["OPENROUTER_API_KEY"]
+data = load_dotenv()
 
-vllm_url = "http://localhost:8000/v1"
-or_url = "https://openrouter.ai/api/v1"
+with open("config.yaml") as f:
+    conf = yaml.safe_load(f)
+    print(conf)
 
-AT_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-AT_BASE_URL = "https://api.anthropic.com/v1"
+token = os.getenv(conf["api_token_var"], "")
 
-llm = ChatOpenAI(
-    model="claude-sonnet-4-20250514",
-    base_url=AT_BASE_URL,
-    api_key=AT_API_KEY,
-    max_completion_tokens=1024,   # keep completions modest to avoid context-limit 400s
-)
+llm_conf = conf["llm"]
+llm_conf["api_key"] = token
 
-prompt = """
-Your task is to play pokerogue and try to beat the game.
-Actions are made by keystrokes. 
-'space' - confirm
-'backspace' - back
-arrow keys ('up', 'down', 'left', 'right') - move up down left right
-Mouse is not usable in this game.
+agent_conf = conf["agent"]
 
-You can catch new pokemon to assemble a strong team.
-Between fights you can pick and buy rewards.
-To proceed through dialogue, press space.
-Good luck.
-"""
+llm = ChatOpenAI(**llm_conf)
 
 async def main():
 
@@ -51,7 +39,7 @@ async def main():
     )
 
     agent = Agent(
-        task=prompt,
+        **agent_conf,
         browser=browser,
         llm=llm,
     )

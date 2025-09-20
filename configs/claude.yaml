@@ -1,0 +1,19 @@
+api_token_var: ANTHROPIC_API_KEY
+
+llm:
+  base_url: https://api.anthropic.com/v1
+  model: claude-sonnet-4-20250514
+
+agent:
+  task: |-
+    Your task is to play pokerogue and try to beat the game.
+    Actions are made by keystrokes. 
+    'space' - confirm
+    'backspace' - back
+    arrow keys ('up', 'down', 'left', 'right') - move up down left right
+    Mouse is not usable in this game.
+
+    You can catch new pokemon to assemble a strong team.
+    Between fights you can pick and buy rewards.
+    To proceed through dialogue, press space.
+    Good luck.
