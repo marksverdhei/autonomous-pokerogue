@@ -1,4 +1,6 @@
-# autonomous-pokerogue
+# autonomous-pokerogue  
+
+This project is in super-alpha. Expect things to break and agent to get stuck.
 
 This project uses [`uv`](https://github.com/astral-sh/uv), which can be installed in one line: 
 ```bash
@@ -9,29 +11,28 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 To get started with the project:
 
 ```
-git clone https://github.com/marksverdhei/autonomous-pokerogue.git
-cd autonomous-pokerogue
+git clone https://github.com/marksverdhei/python-template.git
 ```
 
 Then install project with
 ```
 uv sync --dev
-source .venv/bin/activate
 ```
 
-For development, make sure to install the project with the `-e` flag 
-so the source code isn't distributed to `.venv`:
+Launch browser:
 ```
-uv pip install -e .
+brave-browser --remote-debugging-port=9222 --user-data-dir=/tmp/brave-profile
 ```
+On the browser, you want to navigate to and log in onto pokerogue.net or the 
+instance of locally running pokerogue. Here you want to manually start the game
+and navigate to the first battle
 
-Then you can run the default cli, which can be customized in `cli.py` and `pyproject.toml`  
+Set ANTHROPIC_API_KEY:
 ```
-$ autonomous-pokerogue
-Hello from autonomous-pokerogue
+export ANTHROPIC_API_KEY=xxx
 ```
+And finally, run the program
 
-How to install:
-```bash
-pip install git+https://github.com/marksverdhei/autonomous-pokerogue.git
+```
+uv run main.py
 ```
