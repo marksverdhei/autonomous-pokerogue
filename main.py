@@ -2,33 +2,31 @@ import asyncio
 import os
 from browser_use import Agent, Browser
 from browser_use.llm import ChatOpenAI
-from dotenv import load_dotenv
 import yaml
 
 os.environ["ANONYMIZED_TELEMETRY"] = "false"
-data = load_dotenv()
 
-with open("config.yaml") as f:
-    conf = yaml.safe_load(f)
-    print(conf)
 
-token = os.getenv(conf["api_token_var"], "")
+def load_config():
+    with open("config.yaml") as f:
+        conf = yaml.safe_load(f)
+        print(conf)
 
-llm_conf = conf["llm"]
-llm_conf["api_key"] = token
+    token = os.getenv(conf["api_token_var"], "")
+    return conf, token
 
-agent_conf = conf["agent"]
-
-llm = ChatOpenAI(**llm_conf)
 
 async def main():
-
-    brave_path = "/usr/bin/brave-browser"  # change to your system path
-
+    conf, token = load_config()
+    llm_conf = conf["llm"]
+    llm_conf["api_key"] = token
+    agent_conf = conf["agent"]
+    llm = ChatOpenAI(**llm_conf)
+    brave_path = "/usr/bin/brave-browser"
     browser = Browser(
         headless=False,
         cdp_url="http://localhost:9222",
-        executable_path=brave_path,  # 👈 use Brave instead of default Chromium
+        executable_path=brave_path,
         args=[
             "--enable-gpu",
             "--ignore-gpu-blocklist",
@@ -47,5 +45,6 @@ async def main():
     result = await agent.run()
     print(result)
 
+
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())
