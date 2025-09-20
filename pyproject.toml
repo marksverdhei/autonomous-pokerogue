@@ -8,13 +8,6 @@ dependencies = [
     "browser-use>=0.7.9",
 ]
 
-[project.scripts]
-autonomous-pokerogue = "autonomous_pokerogue:cli.main"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [dependency-groups]
 dev = [
     "ipython>=9.1.0",

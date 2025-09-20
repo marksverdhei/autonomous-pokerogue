@@ -163,7 +163,7 @@ wheels = [
 [[package]]
 name = "autonomous-pokerogue"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "browser-use" },
 ]
