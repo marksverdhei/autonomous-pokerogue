@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "browser-use>=0.7.9",
+    "imagehash>=4.3.2",
     "python-dotenv>=1.1.1",
     "pyyaml>=6.0.2",
     "torch>=2.8.0",
