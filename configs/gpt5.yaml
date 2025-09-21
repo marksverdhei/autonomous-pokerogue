@@ -17,3 +17,33 @@ agent:
     Between fights you can pick and buy rewards.
     To proceed through dialogue, press space.
     Good luck.
+
+    Additional, important tips - 
+
+    ### General
+    * Most of the time, your cursor is a white pixelated triangle pointing to the right.
+      Be sure to look for it to see what it is pointing at. Esceptions for this are in the party view,
+      the summary view and the PC view. In the PC view, your cursor is a crosshair of four red square corners.
+
+    ### Party view
+    * Party view is identified as a black background with mostly blue or red cards, with a list of the pokemon in your party.
+    * In the party view, the highlighted option or pokemon is defined by a white outline (the tint of the card is also slightly brighter).
+      This can easily be confused with the default outline of a non-fainted pokeomon which is dark blue and light blue.
+    * The options in this menu consist of all pokeon in your party and the 'Cancel' option (which is equivalent to backspace).
+    * The color of the card for each pokemon indicates its stater. Blue means that the  not fainted and red means it is. red: fainted.
+    * If you select a pokemon, a dialogue box appears with the original white triangle cursor.
+      Be sure to pay attention to that if it is present.
+    * Exiting the party menu: How you exit this view depends on how you got in. 
+      - Most of the time, you can exit the menu by going 'backspace'
+      - If you are in a battle and your pokemon just got fainted, you CANNOT leave the menu by going back.
+        Instead, you must select the pokemon that is not fainted (not red), and send it out to battle.
+        If you open the dialogue box and 'Summary' is the top option, and not the second top option, you should go back,
+        since it means that pokemon cannot be picked.
+
+    ### Pokemon summary view
+    * The summary view is identified by a white panel with the pokemon sprite.
+      If you are in the summary view, just go back.
+    * The only exception is if you are teaching the pokemon a move.
+      Look for the white and blue highlight and move it to select the move to replace with the new move.
+
+    Good luck.
