@@ -1,11 +1,13 @@
 import asyncio
 import os
-from browser_use import Agent, Browser
+from browser_use import Agent, Browser, Tools
 from browser_use.llm import ChatOpenAI
 import yaml
+from openai import OpenAI
 
 from PIL import Image
 import imagehash
+from tools import SEND_KEYS_ONLY
 
 os.environ["ANONYMIZED_TELEMETRY"] = "false"
 
@@ -18,58 +20,19 @@ def load_config():
     return conf, token
 
 
-
-
-
-def identify_cursor():
-    """
-    Used for textual scaffolding
-    """
-    pass
-
-
-def identify_state():
-    """
-    which menu
-    """
-    pass
-
-
-def screenshot_ocr():
-    pass
-
-
-def classify_screen(img_path, examples):
-    """
-    Classify img_path as one of the example labels.
-    
-    examples: dict[label -> path_to_example_image]
-    Returns: best_label, best_distance
-    """
-    img = Image.open(img_path).convert("RGB")
-    h = imagehash.phash(img)  # 64-bit perceptual hash
-    
-    best_label, best_dist = None, 999
-    for label, ex_path in examples.items():
-        ex_hash = imagehash.phash(Image.open(ex_path).convert("RGB"))
-        dist = h - ex_hash  # Hamming distance
-        if dist < best_dist:
-            best_label, best_dist = label, dist
-    
-    return best_label, best_dist
-
-# --- Example usage ---
-# examples = {
-#     "main menu": "main_menu.png",
-#     "battle": "battle.png",
-#     "party menu": "party_menu.png",
-#     "computer": "computer.png",
-# }
+def pick_first_model(client: OpenAI) -> str:
+    models = client.models.list()
+    if not models.data:
+        raise RuntimeError("No models available at the endpoint http://localhost:8000/v1")
+    return models.data[0].id
 
 
 async def main():
     conf, token = load_config()
     llm_conf = conf["llm"]
+    if llm_conf['model'] == '*':
+        llm_conf['model'] = pick_first_model(OpenAI(base_url=llm_conf['base_url'], api_key=token))
+        print('Using local model:', llm_conf['model'])
     llm_conf["api_key"] = token
     agent_conf = conf["agent"]
     llm = ChatOpenAI(**llm_conf)
@@ -91,6 +54,8 @@ async def main():
         **agent_conf,
         browser=browser,
         llm=llm,
+        tools=SEND_KEYS_ONLY,
+        image_detail='low',
     )
 
     result = await agent.run()
@@ -99,3 +64,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main()) 
+
