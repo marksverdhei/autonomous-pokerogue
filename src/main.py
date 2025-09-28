@@ -1,18 +1,18 @@
 import asyncio
 import os
-from browser_use import Agent, Browser, Tools
+from browser_use import Agent, Browser
 from browser_use.llm import ChatOpenAI
 import yaml
 from openai import OpenAI
 
-from PIL import Image
-import imagehash
 from tools import SEND_KEYS_ONLY
+from sys import argv
 
 os.environ["ANONYMIZED_TELEMETRY"] = "false"
 
-def load_config():
-    with open("config.yaml") as f:
+
+def load_config(conf):
+    with open(conf) as f:
         conf = yaml.safe_load(f)
         print(conf)
 
@@ -27,8 +27,8 @@ def pick_first_model(client: OpenAI) -> str:
     return models.data[0].id
 
 
-async def main():
-    conf, token = load_config()
+async def main(conf):
+    conf, token = load_config(conf)
     llm_conf = conf["llm"]
     if llm_conf['model'] == '*':
         llm_conf['model'] = pick_first_model(OpenAI(base_url=llm_conf['base_url'], api_key=token))
@@ -41,13 +41,6 @@ async def main():
         headless=False,
         cdp_url="http://localhost:9222",
         executable_path=brave_path,
-        args=[
-            "--enable-gpu",
-            "--ignore-gpu-blocklist",
-            "--enable-webgl",
-            "--use-angle=gl",
-            "--disable-software-rasterizer",
-        ],
     )
 
     agent = Agent(
@@ -58,10 +51,17 @@ async def main():
         image_detail='low',
     )
 
-    result = await agent.run()
+    result = await agent.run(
+        on_step_start=hook
+    )
     print(result)
 
+async def hook(*args, **kwargs):
+    print(args, kwargs)
+    import aioconsole
+    await aioconsole.interact()
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    conf = argv[1]
+    asyncio.run(main(conf)) 
 
