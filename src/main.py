@@ -43,12 +43,16 @@ async def main(conf):
         executable_path=brave_path,
     )
 
-    agent = Agent(
+    agent = agent(
         **agent_conf,
         browser=browser,
         llm=llm,
         tools=SEND_KEYS_ONLY,
         image_detail='low',
+        save_conversation_path="./agent_data/",
+        file_system_path="./agent_data/",
+        # this path is just available on my fork
+        agent_base_path="./agent_data/"
     )
 
     result = await agent.run(
@@ -58,8 +62,6 @@ async def main(conf):
 
 async def hook(*args, **kwargs):
     print(args, kwargs)
-    import aioconsole
-    await aioconsole.interact()
 
 if __name__ == "__main__":
     conf = argv[1]

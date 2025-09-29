@@ -6,6 +6,7 @@ llm:
 
 agent:
   task: |-
+    Only send one key at a time please.
     Your task is to play pokerogue and try to beat the game.
     Actions are made by the following inputs: 
     'space' - confirm
