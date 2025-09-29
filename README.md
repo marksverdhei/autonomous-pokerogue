@@ -11,7 +11,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 To get started with the project:
 
 ```
-git clone https://github.com/marksverdhei/python-template.git
+git clone https://github.com/marksverdhei/autonomous-pokerogue.git
 ```
 
 Then install project with
