@@ -1,5 +1,7 @@
 api_token_var: OPENROUTER_API_KEY
 
+browser_binary_path: /usr/bin/brave-browser
+
 llm:
   base_url: https://openrouter.ai/api/v1
   model: openai/gpt-5

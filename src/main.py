@@ -36,11 +36,11 @@ async def main(conf):
     llm_conf["api_key"] = token
     agent_conf = conf["agent"]
     llm = ChatOpenAI(**llm_conf)
-    brave_path = "/usr/bin/brave-browser"
+    browser_path = conf['browser_binary_path']
     browser = Browser(
         headless=False,
         cdp_url="http://localhost:9222",
-        executable_path=brave_path,
+        executable_path=browser_path,
     )
 
     agent = Agent(
