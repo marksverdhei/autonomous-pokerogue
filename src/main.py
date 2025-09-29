@@ -43,7 +43,7 @@ async def main(conf):
         executable_path=brave_path,
     )
 
-    agent = agent(
+    agent = Agent(
         **agent_conf,
         browser=browser,
         llm=llm,
