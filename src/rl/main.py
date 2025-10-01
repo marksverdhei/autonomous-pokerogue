@@ -19,6 +19,34 @@ import json
 import os
 
 
+def reward_func(**kwargs):
+    """
+    Compute rewards for generated outputs
+    For our PoC: reward samples that contain 'start'
+    
+    Args:
+        samples: List of dicts with 'prompt', 'completion', etc.
+        
+    Returns:
+        List of reward values
+    """
+    actions = kwargs.get('action', [])
+    prompts = kwargs.get('prompts', [])
+    assert len(actions) == len(prompts)
+    rewards = []
+    for a in actions:
+        # Probably not necessary
+        a = a.lower()
+        
+        # Check if it contains 'start'
+        if 'start' in a:
+            rewards.append(1.0)
+        else:
+            rewards.append(-0.1)
+    
+    return rewards
+
+
 class PokemonBrowserEnv:
     """
     Synchronous browser environment for Pokemon VLM training
@@ -126,46 +154,6 @@ class PokemonBrowserEnv:
         # Return initial observation
         return self.capture_screenshot()
     
-    def step(self, action: str | int, duration_ms: int = 100) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
-        """
-        Execute one step in the environment (Gym-style interface)
-        
-        Args:
-            action: Action name (str) or index (int)
-            duration_ms: How long to hold the key
-            
-        Returns:
-            observation: Screenshot as numpy array
-            reward: Reward signal (computed based on action)
-            done: Whether episode is done
-            info: Additional information dictionary
-        """
-        # Convert action index to action name if needed
-        if isinstance(action, int):
-            if action not in self.idx_to_action:
-                raise ValueError(f"Invalid action index: {action}. Valid range: 0-{len(self.action_space)-1}")
-            action = self.idx_to_action[action]
-        
-        # Execute action
-        self.send_action(action, duration_ms)
-        
-        # Get new observation
-        observation = self.capture_screenshot()
-        
-        # Compute reward based on action (PoC: reward for pressing 'start')
-        if action == 'start':
-            reward = 1.0
-        else:
-            reward = -0.1
-        
-        # Penalty for invalid actions (only if not constrained)
-        if not self.CONSTRAIN_ACTIONS and not self.validate_action(action):
-            reward = -1.0
-        
-        done = False
-        info = {'action': action}
-        
-        return observation, reward, done, info
     
     def capture_screenshot(self, as_array: bool = True) -> np.ndarray | bytes:
         """
@@ -697,6 +685,9 @@ class PokemonGRPOTrainer:
         print(f"Cached {len(dataset)} trajectory steps")
         
         return dataset
+
+
+
     
     def train(self, num_iterations: int = 10, episodes_per_iteration: int = 10, max_steps_per_episode: int = 50):
         """
@@ -714,21 +705,6 @@ class PokemonGRPOTrainer:
         print("Browser connected!")
         
         # Define reward function for GRPO
-        def reward_func(samples, prompts, outputs, tokenizer, **kwargs):
-            """
-            Compute rewards for generated outputs
-            For our PoC: reward samples that contain 'start'
-            """
-            rewards = []
-            for output in outputs:
-                # Decode the output
-                text = tokenizer.decode(output, skip_special_tokens=True).lower()
-                # Check if it contains 'start'
-                if 'start' in text:
-                    rewards.append(1.0)
-                else:
-                    rewards.append(-0.1)
-            return rewards
         
         try:
             for iteration in range(num_iterations):

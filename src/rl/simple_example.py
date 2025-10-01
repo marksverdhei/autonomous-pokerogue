@@ -107,3 +107,45 @@ def main():
     # Close connection
     env.close()
     print("\nBrowser connection closed")
+
+
+    def step(self, action: str | int, duration_ms: int = 100) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
+        """
+        Execute one step in the environment (Gym-style interface)
+        
+        Args:
+            action: Action name (str) or index (int)
+            duration_ms: How long to hold the key
+            
+        Returns:
+            observation: Screenshot as numpy array
+            reward: Reward signal (computed based on action)
+            done: Whether episode is done
+            info: Additional information dictionary
+        """
+        # Convert action index to action name if needed
+        if isinstance(action, int):
+            if action not in self.idx_to_action:
+                raise ValueError(f"Invalid action index: {action}. Valid range: 0-{len(self.action_space)-1}")
+            action = self.idx_to_action[action]
+        
+        # Execute action
+        self.send_action(action, duration_ms)
+        
+        # Get new observation
+        observation = self.capture_screenshot()
+        
+        # Compute reward based on action (PoC: reward for pressing 'start')
+        if action == 'start':
+            reward = 1.0
+        else:
+            reward = -0.1
+        
+        # Penalty for invalid actions (only if not constrained)
+        if not self.CONSTRAIN_ACTIONS and not self.validate_action(action):
+            reward = -1.0
+        
+        done = False
+        info = {'action': action}
+        
+        return observation, reward, done, info
