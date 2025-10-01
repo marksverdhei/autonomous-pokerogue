@@ -87,6 +87,48 @@ class PokemonBrowserEnv:
         self.action_space = list(self.action_to_key.keys())
         self.action_to_idx = {action: idx for idx, action in enumerate(self.action_space)}
         self.idx_to_action = {idx: action for action, idx in self.action_to_idx.items()}
+
+    def step(self, action: str | int, duration_ms: int = 100) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
+        """
+        Execute one step in the environment (Gym-style interface)
+        
+        Args:
+            action: Action name (str) or index (int)
+            duration_ms: How long to hold the key
+            
+        Returns:
+            observation: Screenshot as numpy array
+            reward: Reward signal (computed based on action)
+            done: Whether episode is done
+            info: Additional information dictionary
+        """
+        # Convert action index to action name if needed
+        if isinstance(action, int):
+            if action not in self.idx_to_action:
+                raise ValueError(f"Invalid action index: {action}. Valid range: 0-{len(self.action_space)-1}")
+            action = self.idx_to_action[action]
+        
+        # Execute action
+        self.send_action(action, duration_ms)
+        
+        # Get new observation
+        observation = self.capture_screenshot()
+        
+        # Compute reward based on action (PoC: reward for pressing 'start')
+        if action == 'start':
+            reward = 1.0
+        else:
+            reward = -0.1
+        
+        # Penalty for invalid actions (only if not constrained)
+        if not self.CONSTRAIN_ACTIONS and not self.validate_action(action):
+            reward = -1.0
+        
+        done = False
+        info = {'action': action}
+        
+        return observation, reward, done, info
+
     
     def connect(self, url: Optional[str] = None, username: str = "cantlogin675", password: str = "cantlogin"):
         """
@@ -424,9 +466,9 @@ class PokemonGRPOTrainer:
         # Simple PoC: Train to press start
         # SmolVLM uses <image> token to indicate where the image should be processed
         prompt = (
-            "<image>You are playing Pokemon. Press the start button. "
-            "Available actions: up, down, left, right, a, b, start, select, noop. "
-            "Respond with only one action word."
+            "<image>\n"
+            "Available actions:[up, down, left, right, a, b, start, select]\n"
+            "Input a single action: "
         )
         return prompt
     
@@ -454,7 +496,7 @@ class PokemonGRPOTrainer:
         
         # Generate with constraints if enabled
         gen_kwargs = {
-            "max_new_tokens": 10,
+            "max_new_tokens": 1,
             "do_sample": True,
             "temperature": 0.7,
         }
@@ -490,8 +532,9 @@ class PokemonGRPOTrainer:
         
         # Generate
         print("  [Model] Generating...")
-        with torch.no_grad():
-            outputs = self.model.generate(**inputs, **gen_kwargs)
+        # with torch.no_grad():
+        #     outputs = self.model.generate(**inputs, **gen_kwargs)
+        outputs = self.model.generate(**inputs, **gen_kwargs)
         
         # Decode
         generated_text = self.processor.batch_decode(outputs, skip_special_tokens=True)[0]
@@ -513,11 +556,15 @@ class PokemonGRPOTrainer:
         Returns:
             Action string (defaults to 'noop' if invalid)
         """
-        text_lower = text.lower().strip()
+        parsed_action = ':'.join(text.split(':')[2:]).strip()
+        print('===')
+        print(f"!{text=}!")
+        print(f"!{parsed_action=}!")
+        print('===')
         
         # Check if any valid action is in the text
         for action in self.env.action_space:
-            if action in text_lower:
+            if action in parsed_action:
                 return action
         
         # Default to noop if no valid action found
@@ -560,36 +607,6 @@ class PokemonGRPOTrainer:
         Returns:
             Dataset containing trajectories
         """
-        cache_file = os.path.join(
-            self.cache_dir, 
-            f"trajectories_ep{num_episodes}_steps{max_steps}.json"
-        )
-        
-        # Check if cached trajectories exist
-        if os.path.exists(cache_file):
-            print(f"Loading cached trajectories from {cache_file}")
-            with open(cache_file, 'r') as f:
-                cached_data = json.load(f)
-            
-            # Reconstruct PIL images from base64
-            import base64
-            from io import BytesIO
-            
-            dataset_dict = {
-                'prompt': cached_data['prompt'],
-                'image': [],
-                'action': cached_data['action'],
-                'reward': cached_data['reward'],
-            }
-            
-            for img_b64 in cached_data['image']:
-                img_bytes = base64.b64decode(img_b64)
-                pil_image = Image.open(BytesIO(img_bytes))
-                dataset_dict['image'].append(pil_image)
-            
-            dataset = Dataset.from_dict(dataset_dict)
-            print(f"Loaded {len(dataset)} cached trajectory steps")
-            return dataset
         
         # Otherwise, collect new trajectories
         print("No cached trajectories found, collecting new ones...")
@@ -659,30 +676,6 @@ class PokemonGRPOTrainer:
                 dataset_dict['reward'].append(traj['rewards'][i])
         
         dataset = Dataset.from_dict(dataset_dict)
-        
-        # Save to cache
-        print(f"Saving trajectories to cache: {cache_file}")
-        import base64
-        from io import BytesIO
-        
-        cache_data = {
-            'prompt': dataset_dict['prompt'],
-            'image': [],
-            'action': dataset_dict['action'],
-            'reward': dataset_dict['reward'],
-        }
-        
-        # Convert PIL images to base64 for JSON serialization
-        for pil_image in dataset_dict['image']:
-            buffered = BytesIO()
-            pil_image.save(buffered, format="PNG")
-            img_b64 = base64.b64encode(buffered.getvalue()).decode()
-            cache_data['image'].append(img_b64)
-        
-        with open(cache_file, 'w') as f:
-            json.dump(cache_data, f)
-        
-        print(f"Cached {len(dataset)} trajectory steps")
         
         return dataset
 
@@ -783,7 +776,7 @@ def train_pokemon_vlm():
     trainer.train(
         num_iterations=50,          # Many iterations for online RL
         episodes_per_iteration=1,   # 1 episode per update = online RL
-        max_steps_per_episode=20    # 20 steps per episode
+        max_steps_per_episode=1,    # 20 steps per episode
     )
 
 
