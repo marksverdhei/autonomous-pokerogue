@@ -5,7 +5,7 @@ Browser environment for Pokemon game
 import numpy as np
 from PIL import Image
 from io import BytesIO
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict, List, Callable
 from playwright.sync_api import sync_playwright, Page, Browser, Playwright
 
 from config import ACTION_SPACE, CONSTRAIN_ACTIONS, START_FROM_ACTIVE_SESSION
@@ -17,7 +17,7 @@ class PokemonBrowserEnv:
     CONSTRAIN_ACTIONS = CONSTRAIN_ACTIONS
     START_FROM_ACTIVE_SESSION = START_FROM_ACTIVE_SESSION
 
-    def __init__(self, debug_port: int = 9222):
+    def __init__(self, debug_port: int = 9222, reward_functions: Optional[List[Callable]] = None):
         self.debug_port = debug_port
         self.browser: Optional[Browser] = None
         self.page: Optional[Page] = None
@@ -25,6 +25,9 @@ class PokemonBrowserEnv:
 
         self.action_to_key = ACTION_SPACE
         self.action_space = list(self.action_to_key.keys())
+
+        # Reward functions
+        self.reward_functions = reward_functions if reward_functions is not None else []
 
     def connect(self, url: Optional[str] = None):
         """Connect to existing browser"""
@@ -82,17 +85,42 @@ class PokemonBrowserEnv:
         self.page.wait_for_timeout(duration_ms)
         self.page.keyboard.up(key)
 
-    def step(self, action: str, duration_ms: int = 100) -> Tuple[np.ndarray, float, bool, Dict]:
-        """Execute step (Gym interface)"""
-        self.send_action(action, duration_ms)
-        observation = self.capture_screenshot()
+    def step(self, action: str, prev_obs: np.ndarray, duration_ms: int = 100) -> Tuple[np.ndarray, float, bool, Dict]:
+        """
+        Execute step (Gym interface)
 
-        # Compute reward
-        reward = 1.0 if action == 'start' else -0.1
+        Args:
+            action: Action to take
+            prev_obs: Screenshot before action (for reward computation)
+            duration_ms: Duration to hold key
+
+        Returns:
+            next_obs: Screenshot after action
+            reward: Computed reward
+            done: Whether episode is done
+            info: Additional info
+        """
+        self.send_action(action, duration_ms)
+        next_obs = self.capture_screenshot()
+
+        # Convert numpy arrays to PIL Images for reward functions
+        prev_obs_pil = Image.fromarray(prev_obs)
+        next_obs_pil = Image.fromarray(next_obs)
+
+        # Compute reward using reward functions
+        reward = 0.0
+        for reward_fn in self.reward_functions:
+            reward += reward_fn(
+                prev_obs=prev_obs_pil,
+                next_obs=next_obs_pil,
+                action=action,
+                env=self
+            )
+
         done = False
         info = {'action': action}
 
-        return observation, reward, done, info
+        return next_obs, reward, done, info
 
     def reset(self) -> np.ndarray:
         """Reset environment"""

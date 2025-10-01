@@ -6,7 +6,7 @@ import os
 import torch
 import numpy as np
 from PIL import Image
-from typing import Tuple, Dict
+from typing import Tuple, Dict, List, Callable, Optional
 from transformers import AutoProcessor, AutoModelForImageTextToText
 
 from environment import PokemonBrowserEnv
@@ -27,6 +27,7 @@ class OnlinePokemonRLTrainer:
         learning_rate: float = 1e-5,
         gamma: float = 0.99,
         entropy_coef: float = 0.01,
+        reward_functions: Optional[List[Callable]] = None,
     ):
         self.model_name = model_name
         self.debug_port = debug_port
@@ -38,7 +39,7 @@ class OnlinePokemonRLTrainer:
         os.makedirs(output_dir, exist_ok=True)
 
         # Initialize environment
-        self.env = PokemonBrowserEnv(debug_port=debug_port)
+        self.env = PokemonBrowserEnv(debug_port=debug_port, reward_functions=reward_functions)
 
         # Load model and processor
         print(f"Loading model: {model_name}")
@@ -178,8 +179,8 @@ class OnlinePokemonRLTrainer:
                 temperature=temperature
             )
 
-            # Execute action
-            next_obs, reward, done, info = self.env.step(action)
+            # Execute action (pass current obs as prev_obs for reward computation)
+            next_obs, reward, done, info = self.env.step(action, prev_obs=obs)
 
             # Store
             log_probs.append(log_prob)
@@ -189,6 +190,7 @@ class OnlinePokemonRLTrainer:
 
             print(f"[Step {step+1}/{max_steps}] action={action}, reward={reward:.2f}")
 
+            # Pipeline: next_obs becomes prev_obs for next iteration
             obs = next_obs
 
             if done:
@@ -238,15 +240,11 @@ class OnlinePokemonRLTrainer:
         # Compute statistics
         total_reward = sum(rewards)
         avg_reward = total_reward / len(rewards)
-        start_count = sum(1 for a in actions_taken if a == 'start')
-        start_percentage = (start_count / len(actions_taken)) * 100
 
         stats = {
             'total_reward': total_reward,
             'avg_reward': avg_reward,
             'steps': len(rewards),
-            'start_count': start_count,
-            'start_percentage': start_percentage,
             'policy_loss': policy_loss.item(),
             'entropy': entropy_losses[0].item() if entropy_losses else 0,
         }
@@ -293,7 +291,6 @@ class OnlinePokemonRLTrainer:
                 print(f"Total Reward: {stats['total_reward']:.2f}")
                 print(f"Avg Reward: {stats['avg_reward']:.3f}")
                 print(f"Steps: {stats['steps']}")
-                print(f"'Start' Actions: {stats['start_count']}/{stats['steps']} ({stats['start_percentage']:.1f}%)")
                 print(f"Policy Loss: {stats['policy_loss']:.4f}")
                 print(f"{'─'*60}\n")
 

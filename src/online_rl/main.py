@@ -3,7 +3,9 @@ Complete Online RL Training for Pokemon VLM
 No pre-collected dataset - generates actions and learns in real-time
 """
 
+from rewards import max_contrast
 from trainer import OnlinePokemonRLTrainer
+from rewards import spam_start
 from config import (
     DEFAULT_MODEL_NAME,
     DEFAULT_DEBUG_PORT,
@@ -31,6 +33,7 @@ def main():
         learning_rate=DEFAULT_LEARNING_RATE,
         gamma=DEFAULT_GAMMA,
         entropy_coef=DEFAULT_ENTROPY_COEF,
+        reward_functions=[max_contrast],
     )
 
     trainer.train(
