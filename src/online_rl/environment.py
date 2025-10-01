@@ -17,7 +17,12 @@ class PokemonBrowserEnv:
     CONSTRAIN_ACTIONS = CONSTRAIN_ACTIONS
     START_FROM_ACTIVE_SESSION = START_FROM_ACTIVE_SESSION
 
-    def __init__(self, debug_port: int = 9222, reward_functions: Optional[List[Callable]] = None):
+    def __init__(
+        self,
+        debug_port: int = 9222,
+        reward_functions: Optional[List[Callable]] = None,
+        image_resolution: Optional[Tuple[int, int]] = None,
+    ):
         self.debug_port = debug_port
         self.browser: Optional[Browser] = None
         self.page: Optional[Page] = None
@@ -28,6 +33,9 @@ class PokemonBrowserEnv:
 
         # Reward functions
         self.reward_functions = reward_functions if reward_functions is not None else []
+
+        # Image resolution (width, height)
+        self.image_resolution = image_resolution
 
     def connect(self, url: Optional[str] = None):
         """Connect to existing browser"""
@@ -63,6 +71,9 @@ class PokemonBrowserEnv:
 
         if as_array:
             image = Image.open(BytesIO(screenshot_bytes))
+            # Resize if resolution is specified
+            if self.image_resolution is not None:
+                image = image.resize(self.image_resolution, Image.LANCZOS)
             return np.array(image)
         return screenshot_bytes
 
@@ -85,7 +96,7 @@ class PokemonBrowserEnv:
         self.page.wait_for_timeout(duration_ms)
         self.page.keyboard.up(key)
 
-    def step(self, action: str, prev_obs: np.ndarray, duration_ms: int = 100) -> Tuple[np.ndarray, float, bool, Dict]:
+    def step(self, action: str, prev_obs: np.ndarray, duration_ms: int = 500) -> Tuple[np.ndarray, float, bool, Dict]:
         """
         Execute step (Gym interface)
 

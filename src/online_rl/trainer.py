@@ -3,6 +3,7 @@ Online RL trainer for Pokemon VLM
 """
 
 import os
+import json
 import torch
 import numpy as np
 from PIL import Image
@@ -28,6 +29,9 @@ class OnlinePokemonRLTrainer:
         gamma: float = 0.99,
         entropy_coef: float = 0.01,
         reward_functions: Optional[List[Callable]] = None,
+        image_resolution: Optional[Tuple[int, int]] = None,
+        log_inputs: bool = False,
+        max_turns: Optional[int] = 1,
     ):
         self.model_name = model_name
         self.debug_port = debug_port
@@ -35,15 +39,31 @@ class OnlinePokemonRLTrainer:
         self.learning_rate = learning_rate
         self.gamma = gamma
         self.entropy_coef = entropy_coef
+        self.log_inputs = log_inputs
+        self.max_turns = max_turns
 
         os.makedirs(output_dir, exist_ok=True)
+        if self.log_inputs:
+            self.logs_dir = os.path.join(output_dir, "input_logs")
+            os.makedirs(self.logs_dir, exist_ok=True)
 
         # Initialize environment
-        self.env = PokemonBrowserEnv(debug_port=debug_port, reward_functions=reward_functions)
+        self.env = PokemonBrowserEnv(
+            debug_port=debug_port,
+            reward_functions=reward_functions,
+            image_resolution=image_resolution,
+        )
 
         # Load model and processor
         print(f"Loading model: {model_name}")
         self.processor = AutoProcessor.from_pretrained(model_name)
+
+        # Override processor image size if resolution is specified
+        if image_resolution is not None and hasattr(self.processor, 'image_processor'):
+            width, height = image_resolution
+            self.processor.image_processor.size = {"width": width, "height": height}
+            print(f"Set processor image size to: {width}x{height}")
+
         self.model = AutoModelForImageTextToText.from_pretrained(
             model_name,
             device_map="auto",
@@ -77,38 +97,54 @@ class OnlinePokemonRLTrainer:
 
         print(f"Action tokens: {self.token_id_to_action}")
 
-    def prepare_prompt(self, image: np.ndarray) -> str:
-        """Create prompt for VLM"""
-        return f"<image>\nSelect one of the following possible actions: {self.env.action_space}\nAction:"
+    def prepare_prompt(self, num_images: int) -> str:
+        """Create prompt for VLM with multiple images in history"""
+        image_tags = "".join(["<image>\n" for _ in range(num_images)])
+        return f"{image_tags}Select one of the following possible actions: {self.env.action_space}\nAction:"
 
     def generate_action_with_logprobs(
         self,
-        image: np.ndarray,
+        history: List[np.ndarray],
         temperature: float = 1.0
-    ) -> Tuple[str, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[str, torch.Tensor, torch.Tensor, int]:
         """
         Generate action and compute log probability
+
+        Args:
+            history: List of observations (images) to pass to model
+            temperature: Sampling temperature
 
         Returns:
             action: Generated action string
             log_prob: Log probability of the action
             entropy: Entropy of the action distribution
+            num_tokens: Number of input tokens
         """
-        pil_image = Image.fromarray(image)
-        prompt_text = self.prepare_prompt(image)
+        # Convert all images to PIL
+        pil_images = [Image.fromarray(img) for img in history]
+        prompt_text = self.prepare_prompt(len(pil_images))
 
-        # Prepare inputs - each call is independent, no history accumulation
+        # Debug: Log image sizes before processor
+        if len(pil_images) > 0:
+            img_sizes = [img.size for img in pil_images]
+            print(f"  [DEBUG] Image sizes before processor: {img_sizes}")
+
+        # Prepare inputs with history
         inputs = self.processor(
-            images=pil_image,
+            images=pil_images,
             text=prompt_text,
             return_tensors="pt"
         )
         inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
 
+        # Debug: Log pixel values shape after processor
+        if 'pixel_values' in inputs:
+            print(f"  [DEBUG] pixel_values shape after processor: {inputs['pixel_values'].shape}")
+
         # Clear any cached key-values to ensure fresh context each time
         self.model.config.use_cache = False
 
-        # Log context size to verify only one image
+        # Log context size
         input_length = inputs['input_ids'].shape[1]
 
         # Forward pass to get logits
@@ -116,9 +152,9 @@ class OnlinePokemonRLTrainer:
             outputs = self.model(**inputs)
             logits = outputs.logits
 
-            # Verify output sequence length matches input (no accumulation)
+            # Verify output sequence length matches input
             assert logits.shape[1] == input_length, \
-                f"Context accumulation detected! Input: {input_length}, Output: {logits.shape[1]}"
+                f"Unexpected output length! Input: {input_length}, Output: {logits.shape[1]}"
 
             # Get logits for next token position
             next_token_logits = logits[:, -1, :] / temperature
@@ -145,12 +181,45 @@ class OnlinePokemonRLTrainer:
         action_token_id = action_token[0, 0].item()
         action = self.token_id_to_action.get(action_token_id, 'noop')
 
-        return action, log_prob, entropy
+        return action, log_prob, entropy, input_length
+
+    def _log_episode_inputs(
+        self,
+        episode_num: int,
+        images: List[np.ndarray],
+        actions: List[str],
+        token_counts: List[int],
+    ):
+        """Log images and text inputs from an episode"""
+        episode_dir = os.path.join(self.logs_dir, f"episode_{episode_num}")
+        os.makedirs(episode_dir, exist_ok=True)
+
+        # Save images
+        for step, img in enumerate(images):
+            pil_img = Image.fromarray(img)
+            pil_img.save(os.path.join(episode_dir, f"step_{step}.png"))
+
+        # Save text prompt (final step with full history)
+        if images:
+            prompt_text = self.prepare_prompt(len(images))
+            with open(os.path.join(episode_dir, "final_prompt.txt"), "w") as f:
+                f.write(prompt_text)
+
+        # Save metadata
+        metadata = {
+            "episode": episode_num,
+            "num_steps": len(images),
+            "actions": actions,
+            "token_counts": token_counts,
+        }
+        with open(os.path.join(episode_dir, "metadata.json"), "w") as f:
+            json.dump(metadata, f, indent=2)
 
     def train_episode(
         self,
         max_steps: int = 50,
         temperature: float = 1.0,
+        episode_num: int = 0,
     ) -> Dict[str, float]:
         """
         Run one episode and update the model
@@ -163,6 +232,9 @@ class OnlinePokemonRLTrainer:
         entropies = []
         rewards = []
         actions_taken = []
+        episode_images = []
+        token_counts = []
+        history = []  # History of observations for multi-turn context
 
         # Reset environment
         obs = self.env.reset()
@@ -173,9 +245,16 @@ class OnlinePokemonRLTrainer:
         print(f"{'─'*60}")
 
         for step in range(max_steps):
-            # Generate action with log probability
-            action, log_prob, entropy = self.generate_action_with_logprobs(
-                obs,
+            # Add current observation to history
+            history.append(obs)
+
+            # Apply sliding window if max_turns is set
+            if self.max_turns is not None and len(history) > self.max_turns:
+                history = history[-self.max_turns:]
+
+            # Generate action with log probability using history
+            action, log_prob, entropy, num_tokens = self.generate_action_with_logprobs(
+                history,
                 temperature=temperature
             )
 
@@ -187,14 +266,20 @@ class OnlinePokemonRLTrainer:
             entropies.append(entropy)
             rewards.append(reward)
             actions_taken.append(action)
+            episode_images.append(obs)
+            token_counts.append(num_tokens)
 
-            print(f"[Step {step+1}/{max_steps}] action={action}, reward={reward:.2f}")
+            print(f"[Step {step+1}/{max_steps}] action={action}, reward={reward:.2f}, history_len={len(history)}, tokens={num_tokens}")
 
             # Pipeline: next_obs becomes prev_obs for next iteration
             obs = next_obs
 
             if done:
                 break
+
+        # Log inputs if enabled (only final step with full history)
+        if self.log_inputs:
+            self._log_episode_inputs(episode_num, episode_images, actions_taken, token_counts)
 
         # Compute returns
         returns = compute_returns(rewards, self.gamma)
@@ -203,38 +288,46 @@ class OnlinePokemonRLTrainer:
         # Normalize returns (helps with training stability)
         returns = normalize_returns(returns)
 
-        # Compute policy gradient loss
+        # Compute policy gradient loss with gradient accumulation
         print(f"\n{'─'*60}")
         print("UPDATING MODEL")
         print(f"{'─'*60}")
 
-        policy_losses = []
-        entropy_losses = []
+        self.optimizer.zero_grad()
 
-        for log_prob, entropy, R in zip(log_probs, entropies, returns):
+        total_policy_loss = 0.0
+        total_entropy_loss = 0.0
+
+        # Accumulate gradients step by step to save memory
+        for i, (log_prob, entropy, R) in enumerate(zip(log_probs, entropies, returns)):
             # Policy gradient: -log_prob * return
             policy_loss = -log_prob * R
-            policy_losses.append(policy_loss)
 
             # Entropy bonus for exploration
-            entropy_losses.append(-entropy)
+            entropy_loss = -entropy
 
-        # Total loss
-        policy_loss = torch.stack(policy_losses).mean()
-        entropy_loss = torch.stack(entropy_losses).mean()
-        total_loss = policy_loss + self.entropy_coef * entropy_loss
+            # Combined loss for this step
+            step_loss = (policy_loss + self.entropy_coef * entropy_loss) / len(log_probs)
 
-        print(f"Policy Loss: {policy_loss.item():.4f}")
-        print(f"Entropy Loss: {entropy_loss.item():.4f}")
-        print(f"Total Loss: {total_loss.item():.4f}")
+            # Backward pass for this step (accumulates gradients)
+            step_loss.backward()
 
-        # Backward pass
-        self.optimizer.zero_grad()
-        total_loss.backward()
+            # Track losses for logging (detach to save memory)
+            total_policy_loss += policy_loss.detach().item()
+            total_entropy_loss += entropy_loss.detach().item()
+
+        # Average losses for logging
+        avg_policy_loss = total_policy_loss / len(log_probs)
+        avg_entropy_loss = total_entropy_loss / len(log_probs)
+
+        print(f"Policy Loss: {avg_policy_loss:.4f}")
+        print(f"Entropy Loss: {avg_entropy_loss:.4f}")
+        print(f"Total Loss: {avg_policy_loss + self.entropy_coef * avg_entropy_loss:.4f}")
 
         # Gradient clipping for stability
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
 
+        # Single optimizer step with accumulated gradients
         self.optimizer.step()
 
         # Compute statistics
@@ -245,8 +338,8 @@ class OnlinePokemonRLTrainer:
             'total_reward': total_reward,
             'avg_reward': avg_reward,
             'steps': len(rewards),
-            'policy_loss': policy_loss.item(),
-            'entropy': entropy_losses[0].item() if entropy_losses else 0,
+            'policy_loss': avg_policy_loss,
+            'entropy': avg_entropy_loss,
         }
 
         return stats
@@ -282,6 +375,7 @@ class OnlinePokemonRLTrainer:
                 stats = self.train_episode(
                     max_steps=max_steps_per_episode,
                     temperature=temperature,
+                    episode_num=episode,
                 )
 
                 # Log statistics
