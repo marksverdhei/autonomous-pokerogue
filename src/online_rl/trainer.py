@@ -97,14 +97,33 @@ class OnlinePokemonRLTrainer:
 
         print(f"Action tokens: {self.token_id_to_action}")
 
-    def prepare_prompt(self, num_images: int) -> str:
-        """Create prompt for VLM with multiple images in history"""
-        image_tags = "".join(["<image>\n" for _ in range(num_images)])
-        return f"{image_tags}Select one of the following possible actions: {self.env.action_space}\nAction:"
+    def prepare_prompt(self, num_images: int, action_history: List[str]) -> str:
+        """
+        Create prompt for VLM with multiple images and actions in history
+
+        Args:
+            num_images: Number of images in history
+            action_history: List of previous actions taken
+
+        Returns:
+            Formatted prompt with interleaved images and actions
+        """
+        # Build conversation history
+        prompt_parts = []
+
+        # For each historical turn (image + action pair)
+        for i in range(len(action_history)):
+            prompt_parts.append(f"<image>\nSelect one of the following possible actions: {self.env.action_space}\nAction: {action_history[i]}")
+
+        # Add current turn (image without action yet)
+        prompt_parts.append(f"<image>\nSelect one of the following possible actions: {self.env.action_space}\nAction:")
+
+        return "\n".join(prompt_parts)
 
     def generate_action_with_logprobs(
         self,
         history: List[np.ndarray],
+        action_history: List[str],
         temperature: float = 1.0
     ) -> Tuple[str, torch.Tensor, torch.Tensor, int]:
         """
@@ -112,6 +131,7 @@ class OnlinePokemonRLTrainer:
 
         Args:
             history: List of observations (images) to pass to model
+            action_history: List of previous actions taken
             temperature: Sampling temperature
 
         Returns:
@@ -122,7 +142,7 @@ class OnlinePokemonRLTrainer:
         """
         # Convert all images to PIL
         pil_images = [Image.fromarray(img) for img in history]
-        prompt_text = self.prepare_prompt(len(pil_images))
+        prompt_text = self.prepare_prompt(len(pil_images), action_history)
 
         # Debug: Log image sizes before processor
         if len(pil_images) > 0:
@@ -201,7 +221,8 @@ class OnlinePokemonRLTrainer:
 
         # Save text prompt (final step with full history)
         if images:
-            prompt_text = self.prepare_prompt(len(images))
+            # For logging, include all actions except the last one (which hasn't been taken yet)
+            prompt_text = self.prepare_prompt(len(images), actions[:-1] if len(actions) > 0 else [])
             with open(os.path.join(episode_dir, "final_prompt.txt"), "w") as f:
                 f.write(prompt_text)
 
@@ -235,6 +256,7 @@ class OnlinePokemonRLTrainer:
         episode_images = []
         token_counts = []
         history = []  # History of observations for multi-turn context
+        action_history = []  # History of actions taken
 
         # Reset environment
         obs = self.env.reset()
@@ -251,10 +273,14 @@ class OnlinePokemonRLTrainer:
             # Apply sliding window if max_turns is set
             if self.max_turns is not None and len(history) > self.max_turns:
                 history = history[-self.max_turns:]
+                # Also trim action_history to match (it should be len(history) - 1)
+                if len(action_history) >= self.max_turns:
+                    action_history = action_history[-(self.max_turns - 1):]
 
-            # Generate action with log probability using history
+            # Generate action with log probability using history and action_history
             action, log_prob, entropy, num_tokens = self.generate_action_with_logprobs(
                 history,
+                action_history,
                 temperature=temperature
             )
 
@@ -269,7 +295,10 @@ class OnlinePokemonRLTrainer:
             episode_images.append(obs)
             token_counts.append(num_tokens)
 
-            print(f"[Step {step+1}/{max_steps}] action={action}, reward={reward:.2f}, history_len={len(history)}, tokens={num_tokens}")
+            # Add action to history for next step
+            action_history.append(action)
+
+            print(f"[Step {step+1}/{max_steps}] action={action}, reward={reward:.2f}, history_len={len(history)}, action_history_len={len(action_history)}, tokens={num_tokens}")
 
             # Pipeline: next_obs becomes prev_obs for next iteration
             obs = next_obs
