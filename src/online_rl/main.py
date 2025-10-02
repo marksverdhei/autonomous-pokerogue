@@ -35,7 +35,7 @@ def main():
         learning_rate=DEFAULT_LEARNING_RATE,
         gamma=DEFAULT_GAMMA,
         entropy_coef=DEFAULT_ENTROPY_COEF,
-        reward_functions=[max_contrast],
+        reward_functions=[reward_ocr],
         image_resolution=DEFAULT_IMAGE_RESOLUTION,
         log_inputs=DEFAULT_LOG_INPUTS,
         max_turns=DEFAULT_MAX_TURNS,

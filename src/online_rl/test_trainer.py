@@ -5,7 +5,9 @@ Unit tests for OnlinePokemonRLTrainer
 import numpy as np
 import pytest
 from unittest.mock import Mock, patch
+from PIL import Image
 from trainer import OnlinePokemonRLTrainer
+from rewards import reward_ocr
 
 
 def create_test_image(value):
@@ -261,3 +263,24 @@ def test_action_history_sliding_window(mock_trainer):
     assert mock_trainer._action_history_log[3] == ['down', 'left']
     # Step 5: 2 actions (sliding window continues) (len=2, 2%5=2, action='left')
     assert mock_trainer._action_history_log[4] == ['left', 'left']
+
+
+def test_reward_ocr_battle_double():
+    """Test that reward_ocr detects the number 4 in battle_double.png"""
+    # Load the test image
+    image_path = '/home/me/Repos/autonomous-pokerogue/assets/gamestates/battle_double.png'
+    img = Image.open(image_path)
+
+    # Mock environment (not used in reward_ocr but required by signature)
+    mock_env = Mock()
+
+    # Call reward_ocr
+    reward = reward_ocr(
+        prev_obs=img,
+        next_obs=img,
+        action='test',
+        env=mock_env
+    )
+
+    # Assert that a reward was given (should detect "4" as a number)
+    assert reward > 0.0, f"Expected positive reward for battle_double.png with '4' in top corner, got {reward}"
