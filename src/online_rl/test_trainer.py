@@ -266,21 +266,55 @@ def test_action_history_sliding_window(mock_trainer):
 
 
 def test_reward_ocr_battle_double():
-    """Test that reward_ocr detects the number 4 in battle_double.png"""
+    """Test that reward_ocr detects number increment in battle_double.png"""
+    from rewards import ocr_top_right_has_number, _run_ocr
+
     # Load the test image
     image_path = '/home/me/Repos/autonomous-pokerogue/assets/gamestates/battle_double.png'
     img = Image.open(image_path)
 
-    # Mock environment (not used in reward_ocr but required by signature)
-    mock_env = Mock()
+    # Test that OCR subfunction detects the number
+    ocr_result = _run_ocr(img)
+    has_number_reward = ocr_top_right_has_number(ocr_result)
+    assert has_number_reward > 0.0, f"Expected positive reward for detecting number in top corner, got {has_number_reward}"
 
-    # Call reward_ocr
-    reward = reward_ocr(
+    # Test that reward_ocr returns 0 when same frame (no increment)
+    mock_env = Mock()
+    reward_same = reward_ocr(
         prev_obs=img,
         next_obs=img,
         action='test',
         env=mock_env
     )
+    assert reward_same == 0.0, f"Expected 0 reward for same frame (no increment), got {reward_same}"
 
-    # Assert that a reward was given (should detect "4" as a number)
-    assert reward > 0.0, f"Expected positive reward for battle_double.png with '4' in top corner, got {reward}"
+
+def test_reward_ocr_increment():
+    """Test that reward_ocr gives large reward when top-right number increments"""
+    from rewards import _run_ocr, ocr_top_right_number_increments
+    from PIL import Image, ImageDraw, ImageFont
+
+    # Create two test images with different numbers in top-right corner
+    def create_image_with_number(number):
+        img = Image.new('RGB', (100, 100), color='white')
+        draw = ImageDraw.Draw(img)
+        # Draw number in top-right corner
+        draw.text((70, 10), str(number), fill='black')
+        return img
+
+    img_4 = create_image_with_number(4)
+    img_5 = create_image_with_number(5)
+
+    # Mock environment
+    mock_env = Mock()
+
+    # Test increment from 4 to 5
+    reward = reward_ocr(
+        prev_obs=img_4,
+        next_obs=img_5,
+        action='test',
+        env=mock_env
+    )
+
+    # Should give large reward for increment
+    assert reward > 5.0, f"Expected large reward (>5.0) for number increment 4->5, got {reward}"
