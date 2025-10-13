@@ -9,6 +9,7 @@ from io import BytesIO
 from typing import Tuple, Optional, Dict, List, Callable
 from playwright.sync_api import sync_playwright, Page, Browser, Playwright
 import nest_asyncio
+
 nest_asyncio.apply()
 
 ACTION_SPACE = {
@@ -50,12 +51,14 @@ class PokemonBrowserEnv:
 
         # Image resolution (width, height)
         self.image_resolution = image_resolution
+        self.url = "https://pokerogue.net"
 
         self.sleep = 0.1
 
-    def connect(self, url: Optional[str] = None):
+    def connect(self):
         """Connect to existing browser"""
         self.playwright = sync_playwright().start()
+
         self.browser = self.playwright.chromium.connect_over_cdp(
             f"http://localhost:{self.debug_port}"
         )
@@ -67,8 +70,8 @@ class PokemonBrowserEnv:
             context = self.browser.new_context()
             self.page = context.new_page()
 
-        if url:
-            self.page.goto(url)
+        if self.page.url != self.url:
+            self.page.goto(self.url)
             self.page.wait_for_load_state('networkidle')
 
         self.page.bring_to_front()
@@ -220,7 +223,6 @@ def autoplay():
             env.send_action("down")
 
 
-
 def test_ocr():
     while True:
         print(env.ocr())
@@ -230,13 +232,9 @@ def test_ocr():
     # It won't have any effect.
 
     
-
-
 def main():
-    # env.connect('https://pokerogue.net')
     env.connect()
     try:
-        # test_ocr()
         autoplay()
     except KeyboardInterrupt:
         print("Terminating")
