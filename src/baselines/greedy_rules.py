@@ -212,21 +212,20 @@ def navigate_pc():
 
 def autoplay():
     navigate_title_screen()
+    ocr_every = 1
+    i = 0
 
     while True:
-        ocr_data = env.ocr()
-        print(ocr_data)
+        if i % ocr_every == 0:
+            ocr_data = env.ocr()
+            print(ocr_data)
+            # Cover moves - 'It won't have any effect.'
+            if any("effect" in s for s in ocr_data):
+                env.send_action("down")
+
         env.send_action("a")
 
-        # Cover moves - 'It won't have any effect.'
-        if any("effect" in s for s in ocr_data):
-            env.send_action("down")
-
-
-def test_ocr():
-    while True:
-        print(env.ocr())
-        input()
+        i += 1
 
 # def unstuck():
     # It won't have any effect.
