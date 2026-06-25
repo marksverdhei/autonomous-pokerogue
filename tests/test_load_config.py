@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import patch
 
-import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -28,7 +26,7 @@ def _write_config(tmp_path: Path, content: dict) -> Path:
 
 class TestLoadConfig:
     def test_returns_tuple_of_conf_and_token(self, tmp_path, monkeypatch):
-        cfg = _write_config(tmp_path, {
+        _write_config(tmp_path, {
             "api_token_var": "MY_TOKEN",
             "llm": {"model": "gpt-4"},
             "agent": {"task": "play"},
@@ -36,7 +34,6 @@ class TestLoadConfig:
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("MY_TOKEN", "secret123")
 
-        import importlib
         import main as m
         conf, token = m.load_config()
 
@@ -44,7 +41,7 @@ class TestLoadConfig:
         assert isinstance(token, str)
 
     def test_token_read_from_env_var(self, tmp_path, monkeypatch):
-        cfg = _write_config(tmp_path, {
+        _write_config(tmp_path, {
             "api_token_var": "OPENROUTER_API_KEY",
             "llm": {},
             "agent": {},
@@ -57,7 +54,7 @@ class TestLoadConfig:
         assert token == "my-key-xyz"
 
     def test_missing_env_var_returns_empty_string(self, tmp_path, monkeypatch):
-        cfg = _write_config(tmp_path, {
+        _write_config(tmp_path, {
             "api_token_var": "NONEXISTENT_KEY",
             "llm": {},
             "agent": {},
@@ -70,7 +67,7 @@ class TestLoadConfig:
         assert token == ""
 
     def test_conf_contains_expected_keys(self, tmp_path, monkeypatch):
-        cfg = _write_config(tmp_path, {
+        _write_config(tmp_path, {
             "api_token_var": "MY_TOKEN",
             "llm": {"base_url": "http://localhost"},
             "agent": {"task": "do something"},
@@ -85,7 +82,7 @@ class TestLoadConfig:
         assert "agent" in conf
 
     def test_llm_conf_preserved(self, tmp_path, monkeypatch):
-        cfg = _write_config(tmp_path, {
+        _write_config(tmp_path, {
             "api_token_var": "T",
             "llm": {"base_url": "https://api.example.com", "model": "gpt-5"},
             "agent": {},
@@ -99,7 +96,7 @@ class TestLoadConfig:
         assert conf["llm"]["base_url"] == "https://api.example.com"
 
     def test_agent_conf_preserved(self, tmp_path, monkeypatch):
-        cfg = _write_config(tmp_path, {
+        _write_config(tmp_path, {
             "api_token_var": "T",
             "llm": {},
             "agent": {"task": "win the game"},
